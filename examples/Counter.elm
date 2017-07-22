@@ -12,11 +12,11 @@ type alias Model =
 type Op
     = Inc
     | Dec
+    | GoTo7
 
 
 type Msg
-    = Incr
-    | Decr
+    = Do Op
     | Undo
     | Redo
 
@@ -29,6 +29,10 @@ dec =
     Retroactive.operation Inc (\i -> i - 1) (\i -> i + 1)
 
 
+goTo7 m =
+    Retroactive.operation Inc (\i -> 7) (\i -> m)
+
+
 init =
     ( 1, Cmd.none )
 
@@ -36,8 +40,9 @@ init =
 view model =
     div []
         [ div []
-            [ button [ onClick Incr ] [ text "+1" ]
-            , button [ onClick Decr ] [ text "-1" ]
+            [ button [ onClick <| Do Inc ] [ text "+1" ]
+            , button [ onClick <| Do Dec ] [ text "-1" ]
+            , button [ onClick <| Do GoTo7 ] [ text "Go to 7" ]
             , button [ onClick Undo ] [ text "Undo" ]
             , button [ onClick Redo ] [ text "Redo" ]
             ]
@@ -47,11 +52,20 @@ view model =
 
 update msg model =
     case msg of
-        Incr ->
-            ( Retroactive.Do inc, Cmd.none )
+        Do op ->
+            let
+                operation =
+                    case op of
+                        Inc ->
+                            inc
 
-        Decr ->
-            ( Retroactive.Do dec, Cmd.none )
+                        Dec ->
+                            dec
+
+                        GoTo7 ->
+                            goTo7 model
+            in
+                ( Retroactive.Do operation, Cmd.none )
 
         Undo ->
             ( Retroactive.Undo, Cmd.none )
