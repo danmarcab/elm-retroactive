@@ -1,0 +1,10 @@
+# Intellij
+.idea
+
+# App artifacts
+/elm-stuff
+/elm.js
+
+# Examples
+/examples/elm-stuff
+/examples/index.html
