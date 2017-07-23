@@ -47,11 +47,7 @@ goTo7 m =
 
 init : ( Model, Cmd Msg )
 init =
-    let
-        ( initialCounter, cmd ) =
-            Retroactive.init ( 1, Cmd.none )
-    in
-        ( { counter = initialCounter }, cmd )
+    ( { counter = Retroactive.init 1 }, Cmd.none )
 
 
 view : Model -> Html Msg

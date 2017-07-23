@@ -6,6 +6,7 @@ module Retroactive
         , History
         , HistoryOptions
         , program
+        , programWithFlags
         , init
         , update
         , view
@@ -37,7 +38,7 @@ Note that there are some differences, for more info check [`program`](#program).
 
 You can check `Counter.elm` for an example.
 
-@docs program
+@docs program, programWithFlags
 
 # Not using program
 
@@ -178,7 +179,7 @@ type History op model
 
 
 {-| Creates a program using Retroactive. Note that the signature of the provided `update` and `view` are different
-from `Html.program`
+from [`Html.program`](http://package.elm-lang.org/packages/elm-lang/html/latest/Html#program)
 
 The first difference is your `update` function needs to return [`Action`](#Action) instead of the usual `Model`.
 
@@ -194,7 +195,27 @@ program :
     -> Program Never (History op model) msg
 program guest =
     Html.program
-        { init = init guest.init
+        { init = Tuple.mapFirst init guest.init
+        , update = update guest.update
+        , view = view guest.view
+        , subscriptions = subscriptions guest.subscriptions
+        }
+
+
+{-| Works the same as [`program`](#program), but it can also handle flags. See
+[`Html.programWithFlags`](http://package.elm-lang.org/packages/elm-lang/html/latest/Html#programWithFlags)
+for more information.
+-}
+programWithFlags :
+    { init : flags -> ( model, Cmd msg )
+    , update : HistoryOptions op -> msg -> model -> ( Action op model, Cmd msg )
+    , view : HistoryOptions op -> model -> Html msg
+    , subscriptions : model -> Sub msg
+    }
+    -> Program flags (History op model) msg
+programWithFlags guest =
+    Html.programWithFlags
+        { init = (\flags -> Tuple.mapFirst init (guest.init flags))
         , update = update guest.update
         , view = view guest.view
         , subscriptions = subscriptions guest.subscriptions
@@ -205,16 +226,14 @@ program guest =
 
 You should only need this if you are using the library [`not using program`](#not-using-program)
 -}
-init : ( model, Cmd msg ) -> ( History op model, Cmd msg )
-init ( model, cmd ) =
-    ( History
+init : model -> History op model
+init model =
+    History
         { operations = Graph.insertData 0 Init Graph.empty
         , lastOperation = 0
         , currentModel = model
         , nextId = 1
         }
-    , cmd
-    )
 
 
 {-| Updates a [`History`](#History).
@@ -235,7 +254,7 @@ update updater msg (History h) =
                     perform op (History h)
 
                 Do Init ->
-                    Tuple.first <| init ( h.currentModel, cmd )
+                    init h.currentModel
 
                 Undo ->
                     undo (History h)
