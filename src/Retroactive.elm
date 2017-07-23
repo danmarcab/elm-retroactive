@@ -1,13 +1,22 @@
-module Retroactive exposing (Action(..), Operation, operation, History, HistoryOptions, program)
+module Retroactive
+    exposing
+        ( Action(..)
+        , Operation
+        , operation
+        , History
+        , HistoryOptions
+        , program
+        , init
+        , update
+        , view
+        , subscriptions
+        )
 
 {-| This library lets you have a retroactive model. This means you can undo / redo
-changes in your model.
+changes in your model. Retroactive means you can have different branches of future (redo).
 
-The retroactive part allows you to have different branches
-of future.
-
-# Using as a program
-@docs program
+The library can be use as a [`Program`](#using-program), so all your model will be retroactive, or
+[`not using Program`](#not-using-program), where you decide what parts of your model you want to make retroactive.
 
 # Actions and Operations
 
@@ -18,6 +27,53 @@ This means the only way of updating your model is to return an [`Action`](#Actio
 
 # History and HistoryOptions
 @docs History, HistoryOptions
+
+# Using program
+
+The easiest way to use this library is to use [`program`](#program). You then provide
+your `init`, `update`, `view` and `subscriptions` as you would do with `Html.Program`.
+
+Note that there are some differences, for more info check [`program`](#program).
+
+You can check `Counter.elm` for an example.
+
+@docs program
+
+# Not using program
+
+If you don't want to use [`program`](#program), you can also follow the next steps to
+integrate it your existing app.
+
+- Store in your model a `[`program`](#program) Op SubModel`, being `SubModel` the part of your model you want to make retroactive
+- Use [`init`](#init), [`update`](#update), [`view`](#view), [`subscriptions`](#subscriptions) of this module when you need to deal with `SubModel`
+
+This usually means you end up building `initSubModel`, `updateSubModel` and so on, and use them like:
+
+    type alias Model =
+        { subModel : History Op SubModel
+        }
+
+    updateSubModel historyOptions msg subModel =
+        -- Some update that returns (Action Op SubModel, Cmd msg)
+
+    update msg model =
+        case msg of
+            SubModelMsg subMsg ->
+                let
+                    (newSubModel, cmd) =
+                        Retroactive.update subModelUpdate subMsg model.subModel
+                in
+                    ({model | subModel = newSubModel}, Cmd.map SubModelMsg cmd)
+
+    subModelView historyOptions subModel =
+        -- Some view
+
+    view model =
+        Html.map SubModelMsg <| Retroactive.view subModelView model.subModel
+
+You can check `CounterNoProgram.elm` for an example.
+
+@docs init, update, view, subscriptions
 
 -}
 
@@ -145,6 +201,10 @@ program guest =
         }
 
 
+{-| Initializes a [`History`](#History) from the initial model.
+
+You should only need this if you are using the library [`not using program`](#not-using-program)
+-}
 init : ( model, Cmd msg ) -> ( History op model, Cmd msg )
 init ( model, cmd ) =
     ( History
@@ -157,6 +217,12 @@ init ( model, cmd ) =
     )
 
 
+{-| Updates a [`History`](#History).
+
+You pass your `update` as first parameter, A [`HistoryOptions`](#HistoryOptions) will be passed to your `update`.
+
+You should only need this if you are using the library [`not using program`](#not-using-program)
+-}
 update : (HistoryOptions op -> msg -> model -> ( Action op model, Cmd msg )) -> msg -> History op model -> ( History op model, Cmd msg )
 update updater msg (History h) =
     let
@@ -180,11 +246,21 @@ update updater msg (History h) =
         ( newHistory, cmd )
 
 
+{-| View for a [`History`](#History).
+
+You pass your `view` as first parameter, A [`HistoryOptions`](#HistoryOptions) will be passed to your `view`.
+
+You should only need this if you are using the library [`not using program`](#not-using-program)
+-}
 view : (HistoryOptions op -> model -> Html msg) -> History op model -> Html msg
 view viewer (History h) =
     viewer (historyOptions (History h)) h.currentModel
 
 
+{-| Get Subscriptions from [`History`](#History).
+
+You should only need this if you are using the library [`not using program`](#not-using-program)
+-}
 subscriptions : (model -> Sub msg) -> History op model -> Sub msg
 subscriptions subscriber (History h) =
     subscriber h.currentModel
