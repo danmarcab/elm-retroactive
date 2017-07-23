@@ -1,35 +1,107 @@
 module Retroactive exposing (Action(..), Operation, operation, History, HistoryOptions, program)
 
-import Html
+{-| This library lets you have a retroactive model. This means you can undo / redo
+changes in your model.
+
+The retroactive part allows you to have different branches
+of future.
+
+# Using as a program
+@docs program
+
+# Actions and Operations
+
+This library forces you to do all updates to your model through actions (see [`Action`](#Action)).
+This means the only way of updating your model is to return an [`Action`](#Action) in your `update` function.
+
+@docs Action, Operation, operation
+
+# History and HistoryOptions
+@docs History, HistoryOptions
+
+-}
+
+import Html exposing (Html)
 import Graph exposing (Graph)
 import Set exposing (Set)
 
 
-type Action o m
-    = Do (Operation o m)
+{-| Represents an action on your model. It can be:
+
+- `Do operation`: performs the [`Operation`](#Operation) `operation`.
+- `Undo`: undoes the last operation.
+- `Redo opId`: redoes the operation with identifier `opId`.
+
+    type Op
+        = Inc
+        | Dec
+
+    type alias Model = Int
+
+    inc =
+        operation Inc (\m -> m + 1) (\m -> m - 1)
+    dec =
+        operation Dec (\m -> m 1 1) (\m -> m + 1)
+
+    update historyOptions msg model =
+        case msg of
+            Msg1 ->
+                (Do inc, Cmd.none)
+            UndoMsg ->
+                (Undo, Cmd.none)
+            RedoMsg op ->
+                (Redo op, Cmd.none)
+-}
+type Action op model
+    = Do (Operation op model)
     | Undo
-    | Redo o
+    | Redo op
 
 
-type Operation o m
-    = Operation (RealOperation o m)
+{-| Represents an operation on your model. It will carry information to know how to do / undo the operation.
+
+To create operations you use [`operation`](#operation).
+-}
+type Operation op model
+    = Operation (RealOperation op model)
     | Init
 
 
-type alias RealOperation o m =
-    { kind : o
-    , do : m -> m
-    , undo : m -> m
+type alias RealOperation op model =
+    { kind : op
+    , do : model -> model
+    , undo : model -> model
     }
 
 
-type alias HistoryOptions o =
-    { undo : Maybe o
-    , redo : List o
+{-| Represents the valid operations you can undo / redo on your model.
+It will be passed to your `update` and `view` functions.
+
+You can use this information to only show / try to perform the valid operations.
+
+There is at most one undo operation, but there can be multiple redo operations.
+This is because you can undo to a certain point, and then start another branch to the future.
+-}
+type alias HistoryOptions op =
+    { undo : Maybe op
+    , redo : List op
     }
 
 
-operation : o -> (m -> m) -> (m -> m) -> Operation o m
+{-| Creates an [`Operation`](#Operation) for your model. You need to provide a value of a custom type as identifier, a function to
+perform the operation in your model, and a function to undo the operation.
+
+    type Op
+        = Inc
+        | Dec
+
+    type alias Model = Int
+
+    operation Inc (\m -> m + 1) (\m -> m - 1)
+    operation Dec (\m -> m 1 1) (\m -> m + 1)
+
+-}
+operation : op -> (model -> model) -> (model -> model) -> Operation op model
 operation kind do undo =
     Operation
         { kind = kind
@@ -38,22 +110,32 @@ operation kind do undo =
         }
 
 
-type History o m
+{-| Stores the History of your model.
+-}
+type History op model
     = History
-        { operations : Graph Int (Operation o m) ()
+        { operations : Graph Int (Operation op model) ()
         , lastOperation : Int
-        , currentModel : m
+        , currentModel : model
         , nextId : Int
         }
 
 
+{-| Creates a program using Retroactive. Note that the signature of the provided `update` and `view` are different
+from `Html.program`
+
+The first difference is your `update` function needs to return [`Action`](#Action) instead of the usual `Model`.
+
+The second difference is your `update` and `view` functions will receive a [`HistoryOptions`](#HistoryOptions) as first
+parameter.
+-}
 program :
-    { init : ( m, Cmd msg )
-    , update : msg -> m -> ( Action o m, Cmd msg )
-    , view : HistoryOptions o -> m -> Html.Html msg
-    , subscriptions : m -> Sub msg
+    { init : ( model, Cmd msg )
+    , update : HistoryOptions op -> msg -> model -> ( Action op model, Cmd msg )
+    , view : HistoryOptions op -> model -> Html msg
+    , subscriptions : model -> Sub msg
     }
-    -> Program Never (History o m) msg
+    -> Program Never (History op model) msg
 program guest =
     Html.program
         { init = init guest.init
@@ -63,7 +145,7 @@ program guest =
         }
 
 
-init : ( m, Cmd msg ) -> ( History o m, Cmd msg )
+init : ( model, Cmd msg ) -> ( History op model, Cmd msg )
 init ( model, cmd ) =
     ( History
         { operations = Graph.insertData 0 Init Graph.empty
@@ -75,11 +157,11 @@ init ( model, cmd ) =
     )
 
 
-update : (msg -> m -> ( Action o m, Cmd msg )) -> msg -> History o m -> ( History o m, Cmd msg )
+update : (HistoryOptions op -> msg -> model -> ( Action op model, Cmd msg )) -> msg -> History op model -> ( History op model, Cmd msg )
 update updater msg (History h) =
     let
         ( action, cmd ) =
-            updater msg h.currentModel
+            updater (historyOptions (History h)) msg h.currentModel
 
         newHistory =
             case action of
@@ -98,17 +180,21 @@ update updater msg (History h) =
         ( newHistory, cmd )
 
 
-view : (HistoryOptions o -> m -> Html.Html msg) -> History o m -> Html.Html msg
+view : (HistoryOptions op -> model -> Html msg) -> History op model -> Html msg
 view viewer (History h) =
     viewer (historyOptions (History h)) h.currentModel
 
 
-subscriptions : (m -> Sub msg) -> History o m -> Sub msg
+subscriptions : (model -> Sub msg) -> History op model -> Sub msg
 subscriptions subscriber (History h) =
     subscriber h.currentModel
 
 
-perform : RealOperation o m -> History o m -> History o m
+
+-- ACTION HELPERS
+
+
+perform : RealOperation op model -> History op model -> History op model
 perform op (History { operations, lastOperation, currentModel, nextId }) =
     let
         outgoingOps =
@@ -138,7 +224,7 @@ perform op (History { operations, lastOperation, currentModel, nextId }) =
             }
 
 
-undo : History o m -> History o m
+undo : History op model -> History op model
 undo (History h) =
     let
         maybeLastOp =
@@ -167,7 +253,7 @@ undo (History h) =
                 History h
 
 
-redo : o -> History o m -> History o m
+redo : op -> History op model -> History op model
 redo opId (History h) =
     let
         outgoingOps =
@@ -184,7 +270,7 @@ redo opId (History h) =
                 History h
 
 
-historyOptions : History o m -> HistoryOptions o
+historyOptions : History op model -> HistoryOptions op
 historyOptions (History h) =
     let
         maybeUndo =
@@ -200,7 +286,7 @@ historyOptions (History h) =
         { undo = maybeUndo, redo = redoOps }
 
 
-getKind : Operation o m -> Maybe o
+getKind : Operation op model -> Maybe op
 getKind op =
     case op of
         Operation operation ->

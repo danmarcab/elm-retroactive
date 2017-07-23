@@ -1,8 +1,8 @@
 module Counter exposing (main)
 
-import Html exposing (div, text, button)
+import Html exposing (Html, button, div, text)
 import Html.Events exposing (onClick)
-import Retroactive
+import Retroactive exposing (Action, History, HistoryOptions, Operation)
 
 
 type alias Model =
@@ -21,22 +21,27 @@ type Msg
     | Redo Op
 
 
+inc : Operation Op Model
 inc =
     Retroactive.operation Inc (\i -> i + 1) (\i -> i - 1)
 
 
+dec : Operation Op Model
 dec =
     Retroactive.operation Dec (\i -> i - 1) (\i -> i + 1)
 
 
+goTo7 : Model -> Operation Op Model
 goTo7 m =
     Retroactive.operation GoTo7 (\i -> 7) (\i -> m)
 
 
+init : ( Model, Cmd Msg )
 init =
     ( 1, Cmd.none )
 
 
+view : HistoryOptions Op -> Model -> Html Msg
 view ({ undo, redo } as options) model =
     let
         actionButtons =
@@ -64,7 +69,8 @@ view ({ undo, redo } as options) model =
             ]
 
 
-update msg model =
+update : HistoryOptions Op -> Msg -> Model -> ( Action Op Model, Cmd Msg )
+update options msg model =
     case msg of
         Do op ->
             let
@@ -92,6 +98,6 @@ subscriptions model =
     Sub.none
 
 
-main : Program Never (Retroactive.History Op Model) Msg
+main : Program Never (History Op Model) Msg
 main =
     Retroactive.program { init = init, update = update, view = view, subscriptions = subscriptions }
