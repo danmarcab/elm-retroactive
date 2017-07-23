@@ -18,7 +18,7 @@ type Op
 type Msg
     = Do Op
     | Undo
-    | Redo
+    | Redo Op
 
 
 inc =
@@ -26,28 +26,42 @@ inc =
 
 
 dec =
-    Retroactive.operation Inc (\i -> i - 1) (\i -> i + 1)
+    Retroactive.operation Dec (\i -> i - 1) (\i -> i + 1)
 
 
 goTo7 m =
-    Retroactive.operation Inc (\i -> 7) (\i -> m)
+    Retroactive.operation GoTo7 (\i -> 7) (\i -> m)
 
 
 init =
     ( 1, Cmd.none )
 
 
-view model =
-    div []
-        [ div []
+view ({ undo, redo } as options) model =
+    let
+        actionButtons =
             [ button [ onClick <| Do Inc ] [ text "+1" ]
             , button [ onClick <| Do Dec ] [ text "-1" ]
             , button [ onClick <| Do GoTo7 ] [ text "Go to 7" ]
-            , button [ onClick Undo ] [ text "Undo" ]
-            , button [ onClick Redo ] [ text "Redo" ]
             ]
-        , div [] [ text <| toString model ]
-        ]
+
+        redoButtons =
+            List.map (\o -> button [ onClick <| Redo o ] [ text <| "Redo: " ++ toString o ]) redo
+
+        historyButtons =
+            case undo of
+                Just o ->
+                    (button [ onClick Undo ] [ text <| "Undo: " ++ toString o ]) :: redoButtons
+
+                Nothing ->
+                    redoButtons
+    in
+        div []
+            [ div []
+                (actionButtons ++ historyButtons)
+            , div [] [ text <| toString model ]
+            , div [] [ text <| toString options ]
+            ]
 
 
 update msg model =
@@ -70,8 +84,8 @@ update msg model =
         Undo ->
             ( Retroactive.Undo, Cmd.none )
 
-        Redo ->
-            ( Retroactive.Redo, Cmd.none )
+        Redo o ->
+            ( Retroactive.Redo o, Cmd.none )
 
 
 subscriptions model =

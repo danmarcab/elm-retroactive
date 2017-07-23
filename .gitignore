@@ -4,6 +4,7 @@
 # App artifacts
 /elm-stuff
 /elm.js
+index.html
 
 # Examples
 /examples/elm-stuff
